@@ -1,110 +1,95 @@
-// app.js ke start me daalo
-const fs = require('fs');
-const uploadDir = './uploads';
-
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
 const express = require('express');
 const multer = require('multer');
-const fs = require('fs');
 const path = require('path');
 const session = require('express-session');
+const fs = require('fs');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// Static
-app.use(express.static('public'));
-app.use('/uploads', express.static('uploads'));
-app.use(express.urlencoded({ extended: true }));
+// ==== Ensure 'uploads/' folder exists ====
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir);
+}
 
-// Session config (24 hour timeout)
-app.use(session({
-  secret: 'your_secret_key',  // change to a strong secret
-  resave: false,
-  saveUninitialized: false,
-  cookie: { maxAge: 24 * 60 * 60 * 1000 }  // 24 hours
-}));
-
-// Multer setup
+// ==== Configure Multer ====
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
+    destination: (req, file, cb) => cb(null, 'uploads/'),
+    filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
 });
 const upload = multer({ storage });
 
-// Middleware: Auth check
-function requireLogin(req, res, next) {
-  if (req.session && req.session.adminLoggedIn) {
-    next();
-  } else {
-    res.redirect('/login');
-  }
-}
+// ==== Middleware ====
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.urlencoded({ extended: true }));
+app.use(session({
+    secret: 'supersecretkey',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 86400000 } // 24 hours
+}));
 
-// Routes
+// ==== Set View Engine ====
+app.set('views', path.join(__dirname, 'views'));
+app.engine('html', require('ejs').renderFile);
+app.set('view engine', 'html');
 
+// ==== Routes ====
+
+// Home Page (Upload Interface)
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'index.html'));
+    res.render('index');
 });
 
+// Handle File Upload
 app.post('/upload', upload.array('uploaded_files', 20), (req, res) => {
-  res.send('<h3>✅ Files uploaded! <a href="/">Upload More</a></h3>');
+    res.send('<h2>Files uploaded successfully! <a href="/">Go back</a></h2>');
 });
 
-// Admin Login Routes
+// Login Page
 app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'login.html'));
+    res.render('login');
 });
 
+// Handle Login
 app.post('/login', (req, res) => {
-  const { password } = req.body;
-  const ADMIN_PASSWORD = 'rahulcsc'; // change to strong password
+    const { password } = req.body;
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
-  if (password === ADMIN_PASSWORD) {
-    req.session.adminLoggedIn = true;
-    res.redirect('/admin');
-  } else {
-    res.send('<h3>❌ Wrong password. <a href="/login">Try again</a></h3>');
-  }
+    if (password === ADMIN_PASSWORD) {
+        req.session.isAdmin = true;
+        res.redirect('/admin');
+    } else {
+        res.send('<h2>Incorrect Password! <a href="/login">Try Again</a></h2>');
+    }
 });
 
-// Protected admin route
-app.get('/admin', requireLogin, (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'admin.html'));
+// Admin Panel
+app.get('/admin', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/login');
+
+    fs.readdir('uploads', (err, files) => {
+        if (err) return res.send('Error reading files.');
+        const images = files.filter(file => /\.(jpg|jpeg|png|gif)$/i.test(file));
+        res.render('admin', { files: images });
+    });
 });
 
-// List files
-app.get('/files', requireLogin, (req, res) => {
-  fs.readdir('uploads/', (err, files) => {
-    if (err) return res.status(500).json({ error: "Unable to fetch files." });
-    res.json(files);
-  });
+// Handle File Deletion
+app.post('/delete', (req, res) => {
+    if (!req.session.isAdmin) return res.status(403).send('Forbidden');
+
+    const filename = req.body.filename;
+    const filepath = path.join(__dirname, 'uploads', filename);
+
+    fs.unlink(filepath, err => {
+        if (err) return res.status(500).send('File not found or cannot be deleted.');
+        res.redirect('/admin');
+    });
 });
 
-// Delete file
-app.delete('/delete/:filename', requireLogin, (req, res) => {
-  const filename = req.params.filename;
-  const filePath = path.join(__dirname, 'uploads', filename);
-
-  if (!filename || filename.includes('..')) {
-    return res.status(400).json({ success: false, error: "Invalid filename" });
-  }
-
-  fs.unlink(filePath, (err) => {
-    if (err) return res.status(500).json({ success: false });
-    res.json({ success: true });
-  });
-});
-
-// Logout
-app.get('/logout', (req, res) => {
-  req.session.destroy(() => {
-    res.redirect('/login');
-  });
-});
-
+// ==== Start Server ====
 app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
+    console.log(`Server running at http://localhost:${PORT}`);
 });
