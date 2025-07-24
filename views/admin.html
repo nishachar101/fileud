@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Panel - File Gallery</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="admin-page">
+  <div class="container">
+    <h1>🖼️ Uploaded File Gallery</h1>
+    <div class="gallery" id="fileGallery"></div>
+  </div>
+
+  <script>
+    function deleteFile(filename, card) {
+      fetch(`/delete/${filename}`, {
+        method: 'DELETE',
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          card.remove();
+        } else {
+          alert("❌ Failed to delete file");
+        }
+      });
+    }
+
+    fetch('/files')
+      .then(res => res.json())
+      .then(files => {
+        const gallery = document.getElementById('fileGallery');
+
+        files.forEach(file => {
+          const fileUrl = `/uploads/${file}`;
+          const ext = file.split('.').pop().toLowerCase();
+
+          const item = document.createElement('div');
+          item.className = 'gallery-item';
+
+          if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+            item.innerHTML = `
+              <a href="${fileUrl}" target="_blank"><img src="${fileUrl}" alt="${file}" /></a>
+              <button class="delete-btn" onclick="deleteFile('${file}', this.parentElement)">🗑️ Delete</button>
+            `;
+          } else {
+            item.innerHTML = `
+              <a href="${fileUrl}" target="_blank"><div class="file-box">${file}</div></a>
+              <button class="delete-btn" onclick="deleteFile('${file}', this.parentElement)">🗑️ Delete</button>
+            `;
+          }
+
+          gallery.appendChild(item);
+        });
+      });
+  </script>
+  <div class="watermark"><b>Made By-</b>Abhishek Bharti</div>
+
+  <footer>
+    <a href="/logout" style="color:white; float:right; font-size:16px;">🚪 Logout</a>
+  </footer>
+
+</body>
+</html>
