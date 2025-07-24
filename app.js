@@ -1,3 +1,10 @@
+// app.js ke start me daalo
+const fs = require('fs');
+const uploadDir = './uploads';
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
 const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
